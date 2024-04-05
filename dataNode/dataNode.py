@@ -3,11 +3,12 @@ import requests
 from flask import Flask, request
 import base64
 
-def registrar_con_servidor(host, port):
+def registrar_con_servidor(host, port, capacidad):
     server_url = 'http://127.0.0.1:5000/register'
     data = {
         'host': host,
-        'port': port
+        'port': port,
+        'capacidad': capacidad
     }
     try:
         response = requests.post(server_url, json=data)
@@ -26,24 +27,31 @@ if __name__ == '__main__':
         port = int(sys.argv[1])
     else:
         port = 8000
+
+    capacidad = 4
+    archivos = [None] * capacidad
     
-    registrar_con_servidor(host, port)
+    registrar_con_servidor(host, port, capacidad)
 
     app = Flask(__name__)
 
-    archivos = []
 
     @app.route('/guardar', methods=['POST'])
     def guardar_archivo():
-        estructura_imagen = request.json.get('archivo')
+        estructura_archivo = request.json.get('archivo')
         
         # Decodificar la representación de texto a bytes utilizando base64
-        imagen_codificada = estructura_imagen['imagen']
-        imagen_bytes = base64.b64decode(imagen_codificada.encode('utf-8'))
-        
-        archivos.append({'nombre': estructura_imagen['nombre'], 'imagen': imagen_bytes})
-        
-        return f'Imagen guardada correctamente en el DataNode. Host: {host}, Puerto: {port}', 200
+        archivo_codificado = estructura_archivo['archivo']
+        archivo_bytes = base64.b64decode(archivo_codificado.encode('utf-8'))
+
+        for i in range(len(archivos)):
+            if archivos[i] is None:
+                archivos[i] = {'nombre': estructura_archivo['nombre'], 'archivo': archivo_bytes}
+                print(f'\nArchivo {estructura_archivo['nombre']} guardado exitosamente')
+
+                break
+                
+        return f'Archivo guardado correctamente en el DataNode. Host: {host}, Puerto: {port}', 200
 
     @app.route('/recuperar', methods=['GET'])
     def recuperar_mensaje():
