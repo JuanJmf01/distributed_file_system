@@ -1,7 +1,9 @@
+from io import BytesIO
 import sys
 import requests
-from flask import Flask, request
+from flask import Flask, request, send_file,jsonify, Response
 import base64
+
 
 def registrar_con_servidor(host, port, capacidad):
     server_url = 'http://127.0.0.1:5000/register'
@@ -29,56 +31,58 @@ if __name__ == '__main__':
         port = 8000
 
     # Definir el límite de peso en bytes (1000 KB en este caso)
-    limite_peso_bytes = 500 * 1024  # 1000 KB en bytes
+    limite_peso_kilo_bytes = 500.0 # 500 KB 
 
     # Inicializar la lista de archivos
-    archivos = bytearray()
+    archivos_guardados = {}
 
-    limite_peso_kilo_bytes = limite_peso_bytes / 1024  # 500 KB 
+    # Inicializar la lista de nombre de archivos
+    nombre_archivos = []
 
-    registrar_con_servidor(host, port, limite_peso_kilo_bytes)
+
+    registrar_con_servidor(host, port, 500.0)
 
     app = Flask(__name__)
 
     @app.route('/guardar', methods=['POST'])
     def guardar_archivo():
-        global archivos
-        
-        estructura_archivo = request.json.get('archivo')
-        
-        # Decodificar la representación de texto a bytes utilizando base64
-        archivo_codificado = estructura_archivo['archivo']
-        archivo_bytes = base64.b64decode(archivo_codificado.encode('utf-8'))
-        
-        # Verificar si agregar el archivo excede el límite de peso
-        peso_archivo_bytes = sys.getsizeof(archivo_bytes)
-        if len(archivos) + peso_archivo_bytes > limite_peso_bytes:
-            return 'Lastimosamente no tenemos espacio suficiente en nuestros servidores para almacenar tu archivo', 400
-        
-        # Agregar el archivo a la lista de archivos
-        archivos.extend(archivo_bytes)
-        
-        print(f'\nArchivo {estructura_archivo["nombre"]} guardado exitosamente')
-        # Calcular el espacio restante después de guardar un archivo
-        espacio_restante_bytes = limite_peso_bytes - len(archivos)
+        datos_archivo = request.json.get('archivo')
+        nombre_archivo = datos_archivo.get('nombre')
+        contenido_archivo = datos_archivo.get('archivo')
+        tamaño_archivo = datos_archivo.get('tamaño_archivo')
 
-        # Convertir el espacio restante a kilobytes para mayor claridad
-        espacio_restante_kb = espacio_restante_bytes / 1024
-        print(espacio_restante_kb)
+        global limite_peso_kilo_bytes  # Declarar como global para modificar la variable global
 
-        requests.post(f'http://127.0.0.1:5000/actualizarCapacidadDataNode', json={'data': {'host': host, 'port': port, 'nuevaCapacidad': espacio_restante_kb}})
 
-                
+        capacidad_disponible = limite_peso_kilo_bytes - tamaño_archivo
+        limite_peso_kilo_bytes = capacidad_disponible
+
+        # Guardar el archivo en el diccionario con su nombre
+        archivos_guardados[nombre_archivo] = contenido_archivo
+        
+        requests.post(f'http://127.0.0.1:5000/actualizarCapacidadDataNode', json={'data': {'host': host, 'port': port, 'nuevaCapacidad': capacidad_disponible}})
+             
         return f'Archivo guardado correctamente en el DataNode. Host: {host}, Puerto: {port}', 200
+    
+
+    @app.route('/recuperar_archivo', methods=['GET'])
+    def recuperar_archivo():
+        data = request.json.get('data_archivo')
+        nombre_archivo = data['nombre_archivo'] 
 
 
-    @app.route('/recuperar', methods=['GET'])
-    def recuperar_mensaje():
-        posicion = request.json.get('posicion')
-        if archivos:
-            mensaje_recuperado = archivos[posicion]
-            return mensaje_recuperado, 200
-        else:
-            return 'No hay mensajes almacenados en el DataNode.', 404
+        contenido_archivo = archivos_guardados[nombre_archivo]
+        return Response(contenido_archivo, mimetype='application/octet-stream')
+
+
+
+    # @app.route('/recuperar_archivo', methods=['GET'])
+    # def recuperar_archivo():
+    #     # Convertir la lista archivos a bytes
+    #     contenido_archivo = bytes(archivos)
+
+    #     # Devolver el contenido de la lista archivos como parte del cuerpo de la respuesta HTTP
+    #     return Response(contenido_archivo, mimetype='application/octet-stream')
+
 
     app.run(debug=True, host=host, port=port)

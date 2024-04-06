@@ -36,6 +36,11 @@ def dividir_archivo(nombre_archivo):
 
     return parte1_codificada, parte2_codificada
 
+def unir_archivos(parte1, parte2):
+    # Decodificar las partes codificadas en base64 y unirlas
+    archivo_unido = parte1 + parte2
+    return archivo_unido
+
 def guardar_mensaje():
     response = requests.post('http://127.0.0.1:5000/opcionesDataNodes')
     if response.status_code == 200:
@@ -67,19 +72,17 @@ def guardar_mensaje():
         if(parte2_size_kb >= lista_de_data_nodes[1]['capacidadActual']):
             guardar_archivo = False
 
-        # Como puedo calcular aca el tamaño en KB  de parte1 y parte2 en dos variables diferentes, una para parte1 y otra para parte2
-
 
         for indice, dataNode in enumerate(lista_de_data_nodes):
             if indice == 0 and guardar_archivo:
-                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'archivo': parte1}})
+                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'archivo': parte1, 'tamaño_archivo': parte1_size_kb}})
                 if response.status_code == 200 :
                     print(response.text)
                     requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 1, 'host': dataNode["host"], 'port': dataNode["port"]}})
                 elif response.status_code == 400:
                     print(response.text)
             elif indice == 1 and guardar_archivo:
-                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'archivo': parte2}})
+                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'archivo': parte2,  'tamaño_archivo': parte2_size_kb}})
                 if response.status_code == 200:
                     print(response.text)
                     requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'host': dataNode["host"], 'port': dataNode["port"]}})
@@ -104,12 +107,12 @@ def recuperar_archivo():
         lista_nombre_archivos = [{'nombre': nombre} for nombre in nombres_archivos]
 
         # Mostrar el menú enumerado de nombres de archivos
-        print("Seleccione el archivo que desea recuperar:")
+        print("\nSeleccione el archivo que desea recuperar:")
         for i, archivo in enumerate(lista_nombre_archivos, start=1):
             print(f"{i}. {archivo['nombre']}")
 
         # Pedir al usuario que seleccione un archivo
-        seleccion = input("Ingrese el número correspondiente al archivo que desea recuperar: ")
+        seleccion = input("\nIngrese el número correspondiente al archivo que desea recuperar: ")
         
         try:
             indice_seleccion = int(seleccion)
@@ -125,6 +128,28 @@ def recuperar_archivo():
         # Guardar en una lista solo la ubicacion de los bloques del archivo correspondiente
         archivos_con_mismo_nombre = [archivo for archivo in lista_ubicacion_archivos if archivo['nombre'] == nombre_seleccionado]
         print(archivos_con_mismo_nombre)
+
+        parte1_archivo = None
+        parte2_archivo = None
+
+        for archivo in archivos_con_mismo_nombre:
+            if archivo['posicion'] == 1:
+                response = requests.get(f'http://{archivo["host"]}:{archivo["port"]}/recuperar_archivo', json={'data_archivo': {'nombre_archivo': nombre_seleccionado}})
+                parte1_archivo = response.content  # Extraer el contenido del archivo de la respuesta
+            elif archivo['posicion'] == 2:
+                response = requests.get(f'http://{archivo["host"]}:{archivo["port"]}/recuperar_archivo', json={'data_archivo': {'nombre_archivo': nombre_seleccionado}})
+                parte2_archivo = response.content  # Extraer el contenido del archivo de la respuesta
+
+        # Decodificar los bloques de base64
+        parte1_decodificada = base64.b64decode(parte1_archivo)
+        parte2_decodificada = base64.b64decode(parte2_archivo)
+
+        # Concatenar los bloques para reconstruir el archivo completo
+        archivo_completo = parte1_decodificada + parte2_decodificada
+
+        nombre_archivo_completo = f'{nombre_seleccionado}_descargado'
+        with open(nombre_archivo_completo, 'wb') as file:
+            file.write(archivo_completo)
 
     else:
         print("Error al recuperar la ubicación de los archivos del servidor.")
