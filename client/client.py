@@ -1,3 +1,4 @@
+import sys
 import requests
 from tkinter import filedialog
 from tkinter import *
@@ -39,36 +40,54 @@ def guardar_mensaje():
     response = requests.post('http://127.0.0.1:5000/opcionesDataNodes')
     if response.status_code == 200:
         # Acceder al contenido de la respuesta como una lista de Python
-        data = response.json()
-        if data['mensaje'] == "exito":
-            lista_de_data_nodes = data["data_nodes"]
-            # Llamar a la función para seleccionar un archivo
-            nombre_completo = seleccionar_archivo()
-            # Obtener el nombre de archivo sin la ruta del directorio
-            nombre_archivo = os.path.basename(nombre_completo)
+        lista_de_data_nodes = response.json()
+        
+        # Llamar a la función para seleccionar un archivo
+        nombre_completo = seleccionar_archivo()
+        # Obtener el nombre de archivo sin la ruta del directorio
+        nombre_archivo = os.path.basename(nombre_completo)
 
-            fecha_hora_actual = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            nombre_con_fecha_hora = nombre_archivo.split(".")[0] + "_" + fecha_hora_actual + "." + nombre_archivo.split(".")[-1]
+        fecha_hora_actual = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        nombre_con_fecha_hora = nombre_archivo.split(".")[0] + "_" + fecha_hora_actual + "." + nombre_archivo.split(".")[-1]
 
-            print("Nombre de archivo seleccionado con fecha y hora:", nombre_con_fecha_hora)
+        print("Nombre de archivo seleccionado con fecha y hora:", nombre_con_fecha_hora)
 
-            # Leer el archivo seleccionado (en la ruta) para guardarla
-            parte1, parte2 = dividir_archivo(nombre_completo)
+        # Leer el archivo seleccionado (en la ruta) para guardarla
+        parte1, parte2 = dividir_archivo(nombre_completo)
+
+        guardar_archivo = True
+
+        parte1_size_kb = sys.getsizeof(parte1) / 1024
+        parte2_size_kb = sys.getsizeof(parte2) / 1024
+
+        print(f'Tamaño bloque 1: {parte1_size_kb} ; Tamaño bloque 2: {parte2_size_kb}')
+
+        if(parte1_size_kb >= lista_de_data_nodes[0]['capacidadActual']):
+            guardar_archivo = False
+        if(parte2_size_kb >= lista_de_data_nodes[1]['capacidadActual']):
+            guardar_archivo = False
+
+        # Como puedo calcular aca el tamaño en KB  de parte1 y parte2 en dos variables diferentes, una para parte1 y otra para parte2
 
 
-            for indice, dataNode in enumerate(lista_de_data_nodes):
-                if indice == 0:
-                    response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'archivo': parte1}})
-                    if response.status_code == 200:
-                        print(response.text)
-                        requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 1, 'host': dataNode["host"], 'port': dataNode["port"]}})
-                elif indice == 1:
-                    response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'archivo': parte2}})
-                    if response.status_code == 200:
-                        print(response.text)
-                        requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'host': dataNode["host"], 'port': dataNode["port"]}})
-        else:
-            print("No se pueden almacenar el archivos. Motivo:", data["mensaje"])
+        for indice, dataNode in enumerate(lista_de_data_nodes):
+            if indice == 0 and guardar_archivo:
+                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'archivo': parte1}})
+                if response.status_code == 200 :
+                    print(response.text)
+                    requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 1, 'host': dataNode["host"], 'port': dataNode["port"]}})
+                elif response.status_code == 400:
+                    print(response.text)
+            elif indice == 1 and guardar_archivo:
+                response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'archivo': parte2}})
+                if response.status_code == 200:
+                    print(response.text)
+                    requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'host': dataNode["host"], 'port': dataNode["port"]}})
+                elif response.status_code == 400:
+                    print(response.text)
+            else:
+                print('Lastimosamente no tenemos espacio suficiente en nuestros servidores para almacenar tu archivo')
+
     else:
         print("Error al guardar el mensaje en el DataNode.")
 

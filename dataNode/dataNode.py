@@ -28,30 +28,49 @@ if __name__ == '__main__':
     else:
         port = 8000
 
-    capacidad = 4
-    archivos = [None] * capacidad
-    
-    registrar_con_servidor(host, port, capacidad)
+    # Definir el límite de peso en bytes (1000 KB en este caso)
+    limite_peso_bytes = 500 * 1024  # 1000 KB en bytes
+
+    # Inicializar la lista de archivos
+    archivos = bytearray()
+
+    limite_peso_kilo_bytes = limite_peso_bytes / 1024  # 500 KB 
+
+    registrar_con_servidor(host, port, limite_peso_kilo_bytes)
 
     app = Flask(__name__)
 
-
     @app.route('/guardar', methods=['POST'])
     def guardar_archivo():
+        global archivos
+        
         estructura_archivo = request.json.get('archivo')
         
         # Decodificar la representación de texto a bytes utilizando base64
         archivo_codificado = estructura_archivo['archivo']
         archivo_bytes = base64.b64decode(archivo_codificado.encode('utf-8'))
+        
+        # Verificar si agregar el archivo excede el límite de peso
+        peso_archivo_bytes = sys.getsizeof(archivo_bytes)
+        if len(archivos) + peso_archivo_bytes > limite_peso_bytes:
+            return 'Lastimosamente no tenemos espacio suficiente en nuestros servidores para almacenar tu archivo', 400
+        
+        # Agregar el archivo a la lista de archivos
+        archivos.extend(archivo_bytes)
+        
+        print(f'\nArchivo {estructura_archivo["nombre"]} guardado exitosamente')
+        # Calcular el espacio restante después de guardar un archivo
+        espacio_restante_bytes = limite_peso_bytes - len(archivos)
 
-        for i in range(len(archivos)):
-            if archivos[i] is None:
-                archivos[i] = {'nombre': estructura_archivo['nombre'], 'archivo': archivo_bytes}
-                print(f'\nArchivo {estructura_archivo['nombre']} guardado exitosamente')
+        # Convertir el espacio restante a kilobytes para mayor claridad
+        espacio_restante_kb = espacio_restante_bytes / 1024
+        print(espacio_restante_kb)
 
-                break
+        requests.post(f'http://127.0.0.1:5000/actualizarCapacidadDataNode', json={'data': {'host': host, 'port': port, 'nuevaCapacidad': espacio_restante_kb}})
+
                 
         return f'Archivo guardado correctamente en el DataNode. Host: {host}, Puerto: {port}', 200
+
 
     @app.route('/recuperar', methods=['GET'])
     def recuperar_mensaje():
