@@ -4,13 +4,21 @@ import requests
 from flask import Flask, request, send_file,jsonify, Response
 import base64
 
+partes_enviadas = set()
 
-def registrar_con_servidor(host, port, capacidad):
-    server_url = 'http://127.0.0.1:5000/register'
+def obtener_direccion_ip():
+    response = requests.get('https://httpbin.org/ip')
+    data = response.json()
+    return data['origin']
+
+
+def registrar_con_servidor(host, port, capacidad, rack):
+    server_url = 'http://44.218.148.6:80/register'
     data = {
         'host': host,
         'port': port,
-        'capacidad': capacidad
+        'capacidad': capacidad,
+        'rack': rack
     }
     try:
         response = requests.post(server_url, json=data)
@@ -22,13 +30,16 @@ def registrar_con_servidor(host, port, capacidad):
         print("Error al conectar con el servidor:", e)
 
 if __name__ == '__main__':
-    host = '127.0.0.1'
-    
+    host = obtener_direccion_ip()
+    if host == "18.206.50.61" or host == "18.213.101.29":
+        zona = "rack2"
+    else:
+        zona = "rack1"
     # Obtener el puerto de la línea de comandos
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     else:
-        port = 8000
+        port = 80
 
     # Definir el límite de peso en bytes (1000 KB en este caso)
     limite_peso_kilo_bytes = 500.0 # 500 KB 
@@ -40,7 +51,7 @@ if __name__ == '__main__':
     nombre_archivos = []
 
 
-    registrar_con_servidor(host, port, 500.0)
+    registrar_con_servidor(host, port, 500.0, zona)
 
     app = Flask(__name__)
 
@@ -53,16 +64,44 @@ if __name__ == '__main__':
 
         global limite_peso_kilo_bytes  # Declarar como global para modificar la variable global
 
-
         capacidad_disponible = limite_peso_kilo_bytes - tamaño_archivo
         limite_peso_kilo_bytes = capacidad_disponible
 
         # Guardar el archivo en el diccionario con su nombre
         archivos_guardados[nombre_archivo] = contenido_archivo
-        
-        requests.post(f'http://127.0.0.1:5000/actualizarCapacidadDataNode', json={'data': {'host': host, 'port': port, 'nuevaCapacidad': capacidad_disponible}})
-             
-        return f'Archivo guardado correctamente en el DataNode. Host: {host}, Puerto: {port}', 200
+
+        requests.post(f'http://44.218.148.6:80/actualizarCapacidadDataNode', json={'data': {'host': host, 'port': port, 'nuevaCapacidad': capacidad_disponible, 'rack': zona}})
+
+        # Obtener lista de DataNodes
+        response = requests.get('http://44.218.148.6:80/opcionesDataNodes')
+        if response.status_code == 200:
+            lista_de_data_nodes = response.json()
+
+            # Encontrar un DataNode de una zona diferente
+            otro_data_node = None
+            for data_node in lista_de_data_nodes:
+                if data_node['rack'] != zona:
+                    otro_data_node = data_node
+                    break
+
+            if otro_data_node:
+                # Generar identificador único para la parte del archivo
+                identificador = hash((nombre_archivo, contenido_archivo))
+
+                if identificador not in partes_enviadas:
+                    # Enviar la parte del archivo al otro DataNode
+                    response = requests.post(f'http://{otro_data_node["host"]}:{otro_data_node["port"]}/guardar', json={'archivo': {'nombre': nombre_archivo, 'archivo': contenido_archivo, 'tamaño_archivo': tamaño_archivo}})
+                    if response.status_code == 200:
+                        print(f'Parte del archivo enviada correctamente al DataNode en la zona {otro_data_node["rack"]}')
+                        partes_enviadas.add(identificador)  # Agregar identificador al conjunto de partes enviadas
+                    else:
+                        print(f'Error al enviar la parte del archivo al DataNode en la zona {otro_data_node["rack"]}')
+                else:
+                    print(f'Parte del archivo con identificador {identificador} ya enviada anteriormente. Evitando reenvío.')
+            else:
+                print('No se encontró ningún DataNode en una zona diferente para enviar la parte del archivo.')
+
+        return f'Archivo guardado correctamente en el DataNode. Host: {host}, Puerto: {port}, Rack: {zona}', 200
     
 
     @app.route('/recuperar_archivo', methods=['GET'])
@@ -85,4 +124,4 @@ if __name__ == '__main__':
     #     return Response(contenido_archivo, mimetype='application/octet-stream')
 
 
-    app.run(debug=True, host=host, port=port)
+    app.run(debug=True, host='0.0.0.0', port=port)
