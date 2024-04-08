@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 import json
-
+import requests
 
 app = Flask(__name__)
 
@@ -13,14 +13,17 @@ def register_data_node():
     host = data.get('host')
     port = data.get('port')
     capacidad = data.get('capacidad')
-
+    if host == "18.206.50.61" or host == "18.213.101.29":
+        zona = "rack2"
+    else:
+        zona = "rack1"
     # Verificar si el DataNode ya esta registrado
     for node in data_nodes:
         if node['host'] == host and node['port'] == port:
             return jsonify({'message': 'DataNode ya registrado'}), 200
 
     # Si el DataNode no está registrado, agregarlo a la lista
-    data_nodes.append({'host': host, 'port': port, 'capacidadActual': capacidad})
+    data_nodes.append({'host': host, 'port': port, 'capacidadActual': capacidad, 'rack': zona})
 
     print("Lista de DataNodes registrados:")
     for node in data_nodes:
@@ -30,8 +33,8 @@ def register_data_node():
 
 if __name__ == '__main__':
     # Especifica el HOST y PORT deseado
-    host = '127.0.0.1'  # Por ejemplo
-    port = 5000  # Por ejemplo
+    host = '44.218.148.6'
+    port = 80
 
     @app.route('/opcionesDataNodes', methods=['POST'])
     def buscar_dataNodes_disponibles():
@@ -66,7 +69,7 @@ if __name__ == '__main__':
         return 'No se encontró el DataNode especificado.', 404
 
         
-
+    
     
     @app.route('/guardar_ubicacion_archivo', methods=['POST'])
     def guardar_ubicacion_archivo():
@@ -90,6 +93,11 @@ if __name__ == '__main__':
         
         # Devolver la lista como parte de la respuesta HTTP
         return ubicacion_json, 200
+
+    
+
+    # Ejecuta la aplicación Flask con el HOST y PORT especificado
+    app.run(debug=True, host='0.0.0.0', port=port)
 
     
 
