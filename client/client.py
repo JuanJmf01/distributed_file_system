@@ -42,7 +42,7 @@ def unir_archivos(parte1, parte2):
     return archivo_unido
 
 def guardar_mensaje():
-    response = requests.post('http://127.0.0.1:5000/opcionesDataNodes')
+    response = requests.post('http://44.218.148.6:80/opcionesDataNodes')
     if response.status_code == 200:
         # Acceder al contenido de la respuesta como una lista de Python
         lista_de_data_nodes = response.json()
@@ -78,14 +78,14 @@ def guardar_mensaje():
                 response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'archivo': parte1, 'tamaño_archivo': parte1_size_kb}})
                 if response.status_code == 200 :
                     print(response.text)
-                    requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 1, 'host': dataNode["host"], 'port': dataNode["port"]}})
+                    requests.post(f'http://44.218.148.6:80/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 1, 'host': dataNode["host"], 'port': dataNode["port"]}})
                 elif response.status_code == 400:
                     print(response.text)
             elif indice == 1 and guardar_archivo:
                 response = requests.post(f'http://{dataNode["host"]}:{dataNode["port"]}/guardar', json={'archivo': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'archivo': parte2,  'tamaño_archivo': parte2_size_kb}})
                 if response.status_code == 200:
                     print(response.text)
-                    requests.post(f'http://127.0.0.1:5000/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'host': dataNode["host"], 'port': dataNode["port"]}})
+                    requests.post(f'http://44.218.148.6:80/guardar_ubicacion_archivo', json={'ubicacion': {'nombre': nombre_con_fecha_hora, 'posicion': 2, 'host': dataNode["host"], 'port': dataNode["port"]}})
                 elif response.status_code == 400:
                     print(response.text)
             else:
@@ -95,7 +95,7 @@ def guardar_mensaje():
         print("Error al guardar el mensaje en el DataNode.")
 
 def recuperar_archivo():
-    response = requests.get('http://127.0.0.1:5000/recuperar_ubicacion_archivos')
+    response = requests.get('http://44.218.148.6:80/recuperar_ubicacion_archivos')
     if response.status_code == 200:
         # Acceder al contenido de la respuesta como una lista de Python
         lista_ubicacion_archivos = json.loads(response.text)
@@ -147,7 +147,7 @@ def recuperar_archivo():
         # Concatenar los bloques para reconstruir el archivo completo
         archivo_completo = parte1_decodificada + parte2_decodificada
 
-        nombre_archivo_completo = f'{nombre_seleccionado}_descargado'
+        nombre_archivo_completo = f'{nombre_seleccionado}'
         with open(nombre_archivo_completo, 'wb') as file:
             file.write(archivo_completo)
 
